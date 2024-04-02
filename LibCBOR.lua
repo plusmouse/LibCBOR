@@ -9,38 +9,10 @@ if not lib then
   return
 end
 
-local setmetatable = setmetatable;
-local getmetatable = getmetatable;
-local assert = assert;
-local error = error;
-local type = type;
-local pairs = pairs;
-local ipairs = ipairs;
-local tostring = tostring;
-local s_char = string.char;
-local t_concat = table.concat;
-local t_sort = table.sort;
-local m_floor = math.floor;
-local m_abs = math.abs;
-local m_huge = math.huge;
-local m_max = math.max;
-local maxint = math.maxinteger or 9007199254740992;
-local minint = math.mininteger or -9007199254740992;
+local maxint = math.huge
+local minint = -math.huge
 local NaN = 0/0;
-local m_frexp = math.frexp;
-local m_ldexp = math.ldexp or function (x, exp) return x * 2.0 ^ exp; end;
-local m_type = math.type or function (n) return n % 1 == 0 and n <= maxint and n >= minint and "integer" or "float" end;
-local s_pack = nil
-local s_unpack = nil
-local b_rshift = bit.rshift
-
--- sanity check
-if s_pack and s_pack(">I2", 0) ~= "\0\0" then
-	s_pack = nil;
-end
-if s_unpack and s_unpack(">I2", "\1\2\3\4") ~= 0x102 then
-	s_unpack = nil;
-end
+local m_type = function (n) return n % 1 == 0 and n <= maxint and n >= minint and "integer" or "float" end;
 
 local _ENV = nil; -- luacheck: ignore 211
 
@@ -57,50 +29,31 @@ local function integer(num, m)
 		num, m = - num - 1, 32;
 	end
 	if num < 24 then
-		return s_char(m + num);
+		return string.char(m + num);
 	elseif num < 2 ^ 8 then
-		return s_char(m + 24, num);
+		return string.char(m + 24, num);
 	elseif num < 2 ^ 16 then
-		return s_char(m + 25, b_rshift(num, 8), num % 0x100);
+		return string.char(m + 25, bit.rshift(num, 8), num % 0x100);
 	elseif num < 2 ^ 32 then
-		return s_char(m + 26,
-			b_rshift(num, 24) % 0x100,
-			b_rshift(num, 16) % 0x100,
-			b_rshift(num, 8) % 0x100,
+		return string.char(m + 26,
+			bit.rshift(num, 24) % 0x100,
+			bit.rshift(num, 16) % 0x100,
+			bit.rshift(num, 8) % 0x100,
 			num % 0x100);
 	elseif num < 2 ^ 64 then
-		local high = m_floor(num / 2 ^ 32);
+		local high = math.floor(num / 2 ^ 32);
 		num = num % 2 ^ 32;
-		return s_char(m + 27,
-			b_rshift(high, 24) % 0x100,
-			b_rshift(high, 16) % 0x100,
-			b_rshift(high, 8) % 0x100,
+		return string.char(m + 27,
+			bit.rshift(high, 24) % 0x100,
+			bit.rshift(high, 16) % 0x100,
+			bit.rshift(high, 8) % 0x100,
 			high % 0x100,
-			b_rshift(num, 24) % 0x100,
-			b_rshift(num, 16) % 0x100,
-			b_rshift(num, 8) % 0x100,
+			bit.rshift(num, 24) % 0x100,
+			bit.rshift(num, 16) % 0x100,
+			bit.rshift(num, 8) % 0x100,
 			num % 0x100);
 	end
 	error "int too large";
-end
-
-if s_pack then
-	function integer(num, m)
-		local fmt;
-		m = m or 0;
-		if num < 24 then
-			fmt, m = ">B", m + num;
-		elseif num < 256 then
-			fmt, m = ">BB", m + 24;
-		elseif num < 65536 then
-			fmt, m = ">BI2", m + 25;
-		elseif num < 4294967296 then
-			fmt, m = ">BI4", m + 26;
-		else
-			fmt, m = ">BI8", m + 27;
-		end
-		return s_pack(fmt, m, num);
-	end
 end
 
 local simple_mt = {};
@@ -144,13 +97,13 @@ function encoder.float(num)
 		return "\251\127\255\255\255\255\255\255\255";
 	end
 	local sign = (num > 0 or 1 / num > 0) and 0 or 1;
-	num = m_abs(num)
-	if num == m_huge then
-		return s_char(251, sign * 128 + 128 - 1) .. "\240\0\0\0\0\0\0";
+	num = math.abs(num)
+	if num == math.huge then
+		return string.char(251, sign * 128 + 128 - 1) .. "\240\0\0\0\0\0\0";
 	end
-	local fraction, exponent = m_frexp(num)
+	local fraction, exponent = math.frexp(num)
 	if fraction == 0 then
-		return s_char(251, sign * 128) .. "\0\0\0\0\0\0\0";
+		return string.char(251, sign * 128) .. "\0\0\0\0\0\0\0";
 	end
 	fraction = fraction * 2;
 	exponent = exponent + 1024 - 2;
@@ -160,23 +113,17 @@ function encoder.float(num)
 	else
 		fraction = fraction - 1;
 	end
-	return s_char(251,
-		sign * 2 ^ 7 + m_floor(exponent / 2 ^ 4) % 2 ^ 7,
+	return string.char(251,
+		sign * 2 ^ 7 + math.floor(exponent / 2 ^ 4) % 2 ^ 7,
 		exponent % 2 ^ 4 * 2 ^ 4 +
-		m_floor(fraction * 2 ^ 4 % 0x100),
-		m_floor(fraction * 2 ^ 12 % 0x100),
-		m_floor(fraction * 2 ^ 20 % 0x100),
-		m_floor(fraction * 2 ^ 28 % 0x100),
-		m_floor(fraction * 2 ^ 36 % 0x100),
-		m_floor(fraction * 2 ^ 44 % 0x100),
-		m_floor(fraction * 2 ^ 52 % 0x100)
+		math.floor(fraction * 2 ^ 4 % 0x100),
+		math.floor(fraction * 2 ^ 12 % 0x100),
+		math.floor(fraction * 2 ^ 20 % 0x100),
+		math.floor(fraction * 2 ^ 28 % 0x100),
+		math.floor(fraction * 2 ^ 36 % 0x100),
+		math.floor(fraction * 2 ^ 44 % 0x100),
+		math.floor(fraction * 2 ^ 52 % 0x100)
 	)
-end
-
-if s_pack then
-	function encoder.float(num)
-		return s_pack(">Bd", 251, num);
-	end
 end
 
 
@@ -229,7 +176,7 @@ function encoder.table(t, opts)
 	end
 	-- map[p] = "\255";
 	map[1] = integer(i - 1, 160);
-	return t_concat(is_array and array or map);
+	return table.concat(is_array and array or map);
 end
 
 -- Array or dict-only encoders, which can be set as __tocbor metamethod
@@ -238,7 +185,7 @@ function encoder.array(t, opts)
 	for i, v in ipairs(t) do
 		array[i] = encode(v, opts);
 	end
-	return integer(#array, 128) .. t_concat(array);
+	return integer(#array, 128) .. table.concat(array);
 end
 
 function encoder.map(t, opts)
@@ -250,7 +197,7 @@ function encoder.map(t, opts)
 	end
 	-- map[p] = "\255";
 	map[1] = integer(len, 160);
-	return t_concat(map);
+	return table.concat(map);
 end
 encoder.dict = encoder.map; -- COMPAT
 
@@ -262,12 +209,12 @@ function encoder.ordered_map(t, opts)
 			i = i + 1;
 			map[i] = k;
 		end
-		t_sort(map);
+		table.sort(map);
 	end
 	for i, k in ipairs(t[1] and t or map) do
 		map[i] = encode(k, opts) .. encode(t[k], opts);
 	end
-	return integer(#map, 160) .. t_concat(map);
+	return integer(#map, 160) .. table.concat(map);
 end
 
 encoder["function"] = function ()
@@ -302,7 +249,7 @@ local decoder = {};
 
 local function read_type(fh)
 	local byte = read_byte(fh);
-	return b_rshift(byte, 5), byte % 32;
+	return bit.rshift(byte, 5), byte % 32;
 end
 
 local function read_object(fh, opts)
@@ -329,7 +276,7 @@ local function read_string(fh, mintyp)
 		out[i], i = v, i + 1;
 		v = read_object(fh);
 	end
-	return t_concat(out);
+	return table.concat(out);
 end
 
 local function read_unicode_string(fh, mintyp)
@@ -397,14 +344,14 @@ local function read_half_float(fh)
 	local sign = exponent < 128 and 1 or -1; -- sign is highest bit
 
 	fraction = fraction + (exponent * 256) % 1024; -- copy two(?) bits from exponent to fraction
-	exponent = b_rshift(exponent, 2) % 32; -- remove sign bit and two low bits from fraction;
+	exponent = bit.rshift(exponent, 2) % 32; -- remove sign bit and two low bits from fraction;
 
 	if exponent == 0 then
-		return sign * m_ldexp(fraction, -24);
+		return sign * math.ldexp(fraction, -24);
 	elseif exponent ~= 31 then
-		return sign * m_ldexp(fraction + 1024, exponent - 25);
+		return sign * math.ldexp(fraction + 1024, exponent - 25);
 	elseif fraction == 0 then
-		return sign * m_huge;
+		return sign * math.huge;
 	else
 		return NaN;
 	end
@@ -414,17 +361,17 @@ local function read_float(fh)
 	local exponent = read_byte(fh);
 	local fraction = read_byte(fh);
 	local sign = exponent < 128 and 1 or -1; -- sign is highest bit
-	exponent = exponent * 2 % 256 + b_rshift(fraction, 7);
+	exponent = exponent * 2 % 256 + bit.rshift(fraction, 7);
 	fraction = fraction % 128;
 	fraction = fraction * 256 + read_byte(fh);
 	fraction = fraction * 256 + read_byte(fh);
 
 	if exponent == 0 then
-		return sign * m_ldexp(exponent, -149);
+		return sign * math.ldexp(exponent, -149);
 	elseif exponent ~= 0xff then
-		return sign * m_ldexp(fraction + 2 ^ 23, exponent - 150);
+		return sign * math.ldexp(fraction + 2 ^ 23, exponent - 150);
 	elseif fraction == 0 then
-		return sign * m_huge;
+		return sign * math.huge;
 	else
 		return NaN;
 	end
@@ -435,7 +382,7 @@ local function read_double(fh)
 	local fraction = read_byte(fh);
 	local sign = exponent < 128 and 1 or -1; -- sign is highest bit
 
-	exponent = exponent %  128 * 16 + b_rshift(fraction, 4);
+	exponent = exponent %  128 * 16 + bit.rshift(fraction, 4);
 	fraction = fraction % 16;
 	fraction = fraction * 256 + read_byte(fh);
 	fraction = fraction * 256 + read_byte(fh);
@@ -445,20 +392,14 @@ local function read_double(fh)
 	fraction = fraction * 256 + read_byte(fh);
 
 	if exponent == 0 then
-		return sign * m_ldexp(exponent, -149);
+		return sign * math.ldexp(exponent, -149);
 	elseif exponent ~= 0xff then
-		return sign * m_ldexp(fraction + 2 ^ 52, exponent - 1075);
+		return sign * math.ldexp(fraction + 2 ^ 52, exponent - 1075);
 	elseif fraction == 0 then
-		return sign * m_huge;
+		return sign * math.huge;
 	else
 		return NaN;
 	end
-end
-
-
-if s_unpack then
-	function read_float(fh) return s_unpack(">f", read_bytes(fh, 4)) end
-	function read_double(fh) return s_unpack(">d", read_bytes(fh, 8)) end
 end
 
 local function read_simple(fh, value, opts)
