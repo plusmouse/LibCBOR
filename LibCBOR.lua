@@ -153,13 +153,6 @@ end
 encoder["nil"] = function() return "\246"; end
 
 function encoder.table(t, opts)
-	local mt = getmetatable(t);
-	if mt then
-		local encode_t = opts and opts[mt] or mt.__tocbor;
-		if encode_t then
-			return encode_t(t, opts);
-		end
-	end
 	-- the table is encoded as an array iff when we iterate over it,
 	-- we see successive integer keys starting from 1.  The lua
 	-- language doesn't actually guarantee that this will be the case
@@ -227,23 +220,13 @@ encoder["function"] = function ()
 	error "can't encode function";
 end
 
--- Decoder
--- Reads from a file-handle like object
-local function read_bytes(fh, len)
-	return fh:read(len);
-end
-
-local function read_byte(fh)
-	return fh:read(1):byte();
-end
-
 local function read_length(fh, mintyp)
 	if mintyp < 24 then
 		return mintyp;
 	elseif mintyp < 28 then
 		local out = 0;
 		for _ = 1, 2 ^ (mintyp - 24) do
-			out = out * 256 + read_byte(fh);
+			out = out * 256 + fh.readbyte();
 		end
 		return out;
 	else
@@ -254,7 +237,7 @@ end
 local decoder = {};
 
 local function read_type(fh)
-	local byte = read_byte(fh);
+	local byte = fh.readbyte();
 	return bit.rshift(byte, 5), byte % 32;
 end
 
@@ -273,7 +256,7 @@ end
 
 local function read_string(fh, mintyp)
 	if mintyp ~= 31 then
-		return read_bytes(fh, read_length(fh, mintyp));
+		return fh.read(read_length(fh, mintyp));
 	end
 	local out = {};
 	local i = 1;
@@ -345,8 +328,8 @@ local function read_semantic(fh, mintyp, opts)
 end
 
 local function read_half_float(fh)
-	local exponent = read_byte(fh);
-	local fraction = read_byte(fh);
+	local exponent = fh.readbyte();
+	local fraction = fh.readbyte();
 	local sign = exponent < 128 and 1 or -1; -- sign is highest bit
 
 	fraction = fraction + (exponent * 256) % 1024; -- copy two(?) bits from exponent to fraction
@@ -364,13 +347,13 @@ local function read_half_float(fh)
 end
 
 local function read_float(fh)
-	local exponent = read_byte(fh);
-	local fraction = read_byte(fh);
+	local exponent = fh.readbyte();
+	local fraction = fh.readbyte();
 	local sign = exponent < 128 and 1 or -1; -- sign is highest bit
 	exponent = exponent * 2 % 256 + bit.rshift(fraction, 7);
 	fraction = fraction % 128;
-	fraction = fraction * 256 + read_byte(fh);
-	fraction = fraction * 256 + read_byte(fh);
+	fraction = fraction * 256 + fh.readbyte();
+	fraction = fraction * 256 + fh.readbyte();
 
 	if exponent == 0 then
 		return sign * math.ldexp(exponent, -149);
@@ -384,18 +367,18 @@ local function read_float(fh)
 end
 
 local function read_double(fh)
-	local exponent = read_byte(fh);
-	local fraction = read_byte(fh);
+	local exponent = fh.readbyte();
+	local fraction = fh.readbyte();
 	local sign = exponent < 128 and 1 or -1; -- sign is highest bit
 
 	exponent = exponent %  128 * 16 + bit.rshift(fraction, 4);
 	fraction = fraction % 16;
-	fraction = fraction * 256 + read_byte(fh);
-	fraction = fraction * 256 + read_byte(fh);
-	fraction = fraction * 256 + read_byte(fh);
-	fraction = fraction * 256 + read_byte(fh);
-	fraction = fraction * 256 + read_byte(fh);
-	fraction = fraction * 256 + read_byte(fh);
+	fraction = fraction * 256 + fh.readbyte();
+	fraction = fraction * 256 + fh.readbyte();
+	fraction = fraction * 256 + fh.readbyte();
+	fraction = fraction * 256 + fh.readbyte();
+	fraction = fraction * 256 + fh.readbyte();
+	fraction = fraction * 256 + fh.readbyte();
 
 	if exponent == 0 then
 		return sign * math.ldexp(exponent, -149);
@@ -410,7 +393,7 @@ end
 
 local function read_simple(fh, value, opts)
 	if value == 24 then
-		value = read_byte(fh);
+		value = fh.readbyte();
 	end
 	if value == 20 then
 		return false;
@@ -465,21 +448,26 @@ local function decode(s, opts)
 		end
 	end
 
-	function fh:read(bytes)
-		local ret = s:sub(pos, pos + bytes - 1);
+	function fh.read(bytes)
+		local ret = string.sub(s, pos, pos + bytes - 1);
 		if #ret < bytes then
 			ret = more(bytes - #ret, fh, opts);
-			if ret then self:write(ret); end
-			return self:read(bytes);
+			if ret then self.write(ret); end
+			return self.read(bytes);
 		end
 		pos = pos + bytes;
 		return ret;
 	end
 
-	function fh:write(bytes) -- luacheck: no self
+	function fh.readbyte()
+    pos = pos + 1
+    return string.byte(s, pos - 1)
+  end
+
+	function fh.write(bytes) -- luacheck: no self
 		s = s .. bytes;
 		if pos > 256 then
-			s = s:sub(pos + 1);
+			s = string.sub(s, pos + 1);
 			pos = 1;
 		end
 		return #bytes;
@@ -492,7 +480,6 @@ for key, val in pairs({
 	-- en-/decoder functions
 	encode = encode;
 	decode = decode;
-	decode_file = read_object;
 
 	-- tables of per-type en-/decoders
 	type_encoders = encoder;
