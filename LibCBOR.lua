@@ -11,7 +11,6 @@ end
 
 local setmetatable = setmetatable;
 local getmetatable = getmetatable;
-local dbg_getmetatable = debug.getmetatable;
 local assert = assert;
 local error = error;
 local type = type;
@@ -199,17 +198,6 @@ function encoder.boolean(bool)
 end
 
 encoder["nil"] = function() return "\246"; end
-
-function encoder.userdata(ud, opts)
-	local mt = dbg_getmetatable(ud);
-	if mt then
-		local encode_ud = opts and opts[mt] or mt.__tocbor;
-		if encode_ud then
-			return encode_ud(ud, opts);
-		end
-	end
-	error "can't encode userdata";
-end
 
 function encoder.table(t, opts)
 	local mt = getmetatable(t);
