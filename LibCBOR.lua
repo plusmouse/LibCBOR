@@ -3,7 +3,13 @@
 -- Concise Binary Object Representation (CBOR)
 -- RFC 7049
 
-local lib = LibStub:NewLibrary("LibCBOR-1.0", 1)
+local lib
+if not LibStub then
+  LibCBOR = {}
+  lib = LibCBOR
+else
+  lib = LibStub:NewLibrary("LibCBOR-1.0", 1)
+end
 
 if not lib then
   return
