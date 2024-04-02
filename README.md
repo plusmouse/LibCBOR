@@ -4,29 +4,13 @@ Lua-CBOR
 Lua-CBOR is a (mostly) pure Lua implementation of the
 [CBOR](http://cbor.io/), a compact data serialization format,
 defined in [RFC 7049](http://tools.ietf.org/html/rfc7049).
-It supports Lua 5.1 until 5.4 and will utilize struct packing
-and bitwise operations if available.
-
-Installing
-----------
-
-Lua-CBOR can be installed using [LuaRocks](https://luarocks.org/):
-
-    luarocks install lua-cbor
-
-Sources are available from <https://code.zash.se/lua-cbor/>.
-
-### Optional dependencies
-
--   Struct library compatible with [`string.pack` and `string.unpack`
-    from Lua 5.3](http://www.lua.org/manual/5.3/manual.html#6.4.2), such
-    as <http://www.inf.puc-rio.br/~roberto/struct/>.
--   Bitwise operators compatible with
-    [those in LuaJIT](http://bitop.luajit.org/) or
-    [Lua 5.2](https://luarocks.org/modules/siffiejoe/bit32).
 
 API
 ---
+
+```lua
+local cbor = LibStub("LibCBOR-1.0")
+```
 
 Lua-CBOR has a similar API to many other serialization libraries, like
 Lua-CJSON.
@@ -144,18 +128,4 @@ cbor.encode(setmetatable({1, 2, 3, nil, foo= "bar" }, array_mt));
 local ordered_map_mt = { __tocbor = cbor.type_encoders.ordered_map }
 
 cbor.encode(setmetatable({ foo = "hello", bar = "world", "foo", "bar" }, array_mt));
-```
-
-Bignum support
---------------
-
-Lua-CBOR has optional support for bignums, using
-[luaossl](http://www.25thandclement.com/~william/projects/luaossl.html).
-
-```lua
-local cbor = require"cbor";
-local bignum = require"openssl.bignum";
-require"cbor.bignum";
-
-io.write(cbor.encode(bignum.new("9000")));
 ```
