@@ -19,6 +19,7 @@ local maxint = math.huge
 local minint = -math.huge
 local NaN = 0/0;
 local m_type = function (n) return n % 1 == 0 and n <= maxint and n >= minint and "integer" or "float" end;
+local b_rshift = bit and b_rshift or function (a, b) return math.max(0, math.floor(a / (2 ^ b))); end
 
 local _ENV = nil; -- luacheck: ignore 211
 
@@ -39,24 +40,24 @@ local function integer(num, m)
 	elseif num < 2 ^ 8 then
 		return string.char(m + 24, num);
 	elseif num < 2 ^ 16 then
-		return string.char(m + 25, bit.rshift(num, 8), num % 0x100);
+		return string.char(m + 25, b_rshift(num, 8), num % 0x100);
 	elseif num < 2 ^ 32 then
 		return string.char(m + 26,
-			bit.rshift(num, 24) % 0x100,
-			bit.rshift(num, 16) % 0x100,
-			bit.rshift(num, 8) % 0x100,
+			b_rshift(num, 24) % 0x100,
+			b_rshift(num, 16) % 0x100,
+			b_rshift(num, 8) % 0x100,
 			num % 0x100);
 	elseif num < 2 ^ 64 then
 		local high = math.floor(num / 2 ^ 32);
 		num = num % 2 ^ 32;
 		return string.char(m + 27,
-			bit.rshift(high, 24) % 0x100,
-			bit.rshift(high, 16) % 0x100,
-			bit.rshift(high, 8) % 0x100,
+			b_rshift(high, 24) % 0x100,
+			b_rshift(high, 16) % 0x100,
+			b_rshift(high, 8) % 0x100,
 			high % 0x100,
-			bit.rshift(num, 24) % 0x100,
-			bit.rshift(num, 16) % 0x100,
-			bit.rshift(num, 8) % 0x100,
+			b_rshift(num, 24) % 0x100,
+			b_rshift(num, 16) % 0x100,
+			b_rshift(num, 8) % 0x100,
 			num % 0x100);
 	end
 	error "int too large";
@@ -238,7 +239,7 @@ local decoder = {};
 
 local function read_type(fh)
 	local byte = fh.readbyte();
-	return bit.rshift(byte, 5), byte % 32;
+	return b_rshift(byte, 5), byte % 32;
 end
 
 local function read_object(fh, opts)
@@ -333,7 +334,7 @@ local function read_half_float(fh)
 	local sign = exponent < 128 and 1 or -1; -- sign is highest bit
 
 	fraction = fraction + (exponent * 256) % 1024; -- copy two(?) bits from exponent to fraction
-	exponent = bit.rshift(exponent, 2) % 32; -- remove sign bit and two low bits from fraction;
+	exponent = b_rshift(exponent, 2) % 32; -- remove sign bit and two low bits from fraction;
 
 	if exponent == 0 then
 		return sign * math.ldexp(fraction, -24);
@@ -350,7 +351,7 @@ local function read_float(fh)
 	local exponent = fh.readbyte();
 	local fraction = fh.readbyte();
 	local sign = exponent < 128 and 1 or -1; -- sign is highest bit
-	exponent = exponent * 2 % 256 + bit.rshift(fraction, 7);
+	exponent = exponent * 2 % 256 + b_rshift(fraction, 7);
 	fraction = fraction % 128;
 	fraction = fraction * 256 + fh.readbyte();
 	fraction = fraction * 256 + fh.readbyte();
@@ -371,7 +372,7 @@ local function read_double(fh)
 	local fraction = fh.readbyte();
 	local sign = exponent < 128 and 1 or -1; -- sign is highest bit
 
-	exponent = exponent %  128 * 16 + bit.rshift(fraction, 4);
+	exponent = exponent %  128 * 16 + b_rshift(fraction, 4);
 	fraction = fraction % 16;
 	fraction = fraction * 256 + fh.readbyte();
 	fraction = fraction * 256 + fh.readbyte();
