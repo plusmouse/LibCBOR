@@ -189,14 +189,12 @@ function encoder.array(t, opts)
 end
 
 function encoder.map(t, opts)
-	local map, p, len = { "\191" }, 2, 0;
+	local map = { "\191" }
 	for k, v in pairs(t) do
-		map[p], p = encode(k, opts), p + 1;
-		map[p], p = encode(v, opts), p + 1;
-		len = len + 1;
+    table.insert(map, encode(k, opts))
+		table.insert(map, encode(v, opts))
 	end
-	-- map[p] = "\255";
-	map[1] = integer(len, 160);
+	map[1] = integer(#map - 1, 160);
 	return table.concat(map);
 end
 encoder.dict = encoder.map; -- COMPAT
