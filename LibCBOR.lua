@@ -162,7 +162,7 @@ function encoder.table(t, opts)
 	-- usually observe.  See the Lua manual regarding the # (length)
 	-- operator.  In the case that this does not happen, we will fall
 	-- back to a map with integer keys, which becomes a bit larger.
-	local array, map, i, p = { integer(#t, 128) }, { "\191" }, 1, 2;
+	local array, map, i = { integer(#t, 128) }, { "\191" }, 1
 	local is_array = true;
 	for k, v in pairs(t) do
 		is_array = is_array and i == k;
@@ -171,10 +171,10 @@ function encoder.table(t, opts)
 		local encoded_v = encode(v, opts);
 		array[i] = encoded_v;
 
-		map[p], p = encode(k, opts), p + 1;
-		map[p], p = encoded_v, p + 1;
+    table.insert(map, encode(tostring(k), opts))
+    table.insert(map, encoded_v)
 	end
-	-- map[p] = "\255";
+	--map[#map + 1] = "\255";
 	map[1] = integer(i - 1, 160);
 	return table.concat(is_array and array or map);
 end
@@ -190,11 +190,13 @@ end
 
 function encoder.map(t, opts)
 	local map = { "\191" }
+  local i = 0
 	for k, v in pairs(t) do
-    table.insert(map, encode(k, opts))
+    i = i + 1
+    table.insert(map, encode(tostring(k), opts))
 		table.insert(map, encode(v, opts))
 	end
-	map[1] = integer(#map - 1, 160);
+	map[1] = integer(i, 160);
 	return table.concat(map);
 end
 encoder.dict = encoder.map; -- COMPAT
