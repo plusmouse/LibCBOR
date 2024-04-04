@@ -144,8 +144,8 @@ function encoder.utf8string(s)
 	return integer(#s, 96) .. s;
 end
 
--- Lua strings are byte strings
-encoder.string = encoder.bytestring;
+-- Modern Lua strings are UTF-UTF-8
+encoder.string = encoder.utf8string;
 
 function encoder.boolean(bool)
 	return bool and "\245" or "\244";
@@ -171,7 +171,7 @@ function encoder.table(t, opts)
 		local encoded_v = encode(v, opts);
 		array[i] = encoded_v;
 
-    table.insert(map, encode(tostring(k), opts))
+    table.insert(map, encode(k, opts))
     table.insert(map, encoded_v)
 	end
 	--map[#map + 1] = "\255";
@@ -193,7 +193,7 @@ function encoder.map(t, opts)
   local i = 0
 	for k, v in pairs(t) do
     i = i + 1
-    table.insert(map, encode(tostring(k), opts))
+    table.insert(map, encode(k, opts))
 		table.insert(map, encode(v, opts))
 	end
 	map[1] = integer(i, 160);
@@ -479,7 +479,7 @@ end
 
 for key, val in pairs({
 	-- en-/decoder functions
-	encode = encode;
+	encode = function(...) return encode(...) .. "\255" end;
 	decode = decode;
 
 	-- tables of per-type en-/decoders
