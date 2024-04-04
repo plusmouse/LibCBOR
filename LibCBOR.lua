@@ -479,7 +479,7 @@ end
 
 for key, val in pairs({
 	-- en-/decoder functions
-	encode = function(...) return encode(...) .. "\255" end;
+	encode = encode;
 	decode = decode;
 
 	-- tables of per-type en-/decoders
