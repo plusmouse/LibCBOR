@@ -378,8 +378,9 @@ local function decode(s)
 	local fh = {};
 	local pos = 1;
 
+  local more = nil
 	if type(more) ~= "function" then
-		function more()
+		more = function()
 			error "input too short";
 		end
 	end
