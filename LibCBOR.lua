@@ -23,8 +23,8 @@ local b_rshift = bit and b_rshift or function (a, b) return math.max(0, math.flo
 
 local encoder = {};
 
-local function encode(obj, opts)
-	return encoder[type(obj)](obj, opts);
+local function encode(obj)
+	return encoder[type(obj)](obj);
 end
 
 -- Major types 0, 1 and length encoding for others
@@ -140,7 +140,7 @@ end
 
 encoder["nil"] = function() return "\246"; end
 
-function encoder.table(t, opts)
+function encoder.table(t)
 	-- the table is encoded as an array iff when we iterate over it,
 	-- we see successive integer keys starting from 1.  The lua
 	-- language doesn't actually guarantee that this will be the case
@@ -155,10 +155,10 @@ function encoder.table(t, opts)
 		is_array = is_array and i == k;
 		i = i + 1;
 
-		local encoded_v = encode(v, opts);
+		local encoded_v = encode(v);
 		array[i] = encoded_v;
 
-    table.insert(map, encode(k, opts))
+    table.insert(map, encode(k))
     table.insert(map, encoded_v)
 	end
 	--map[#map + 1] = "\255";
@@ -191,9 +191,9 @@ local function read_type(fh)
 	return b_rshift(byte, 5), byte % 32;
 end
 
-local function read_object(fh, opts)
+local function read_object(fh)
 	local typ, mintyp = read_type(fh);
-	return decoder[typ](fh, mintyp, opts);
+	return decoder[typ](fh, mintyp);
 end
 
 local function read_integer(fh, mintyp)
@@ -227,39 +227,39 @@ local function read_unicode_string(fh, mintyp)
 	-- return str;
 end
 
-local function read_array(fh, mintyp, opts)
+local function read_array(fh, mintyp)
 	local out = {};
 	if mintyp == 31 then
 		local i = 1;
-		local v = read_object(fh, opts);
+		local v = read_object(fh);
 		while v ~= BREAK do
 			out[i], i = v, i + 1;
-			v = read_object(fh, opts);
+			v = read_object(fh);
 		end
 	else
 		local len = read_length(fh, mintyp);
 		for i = 1, len do
-			out[i] = read_object(fh, opts);
+			out[i] = read_object(fh);
 		end
 	end
 	return out;
 end
 
-local function read_map(fh, mintyp, opts)
+local function read_map(fh, mintyp)
 	local out = {};
 	local k;
 	if mintyp == 31 then
 		local i = 1;
-		k = read_object(fh, opts);
+		k = read_object(fh);
 		while k ~= BREAK do
-			out[k], i = read_object(fh, opts), i + 1;
-			k = read_object(fh, opts);
+			out[k], i = read_object(fh), i + 1;
+			k = read_object(fh);
 		end
 	else
 		local len = read_length(fh, mintyp);
 		for _ = 1, len do
-			k = read_object(fh, opts);
-			out[k] = read_object(fh, opts);
+			k = read_object(fh);
+			out[k] = read_object(fh);
 		end
 	end
 	return out;
@@ -267,10 +267,10 @@ end
 
 local tagged_decoders = {};
 
-local function read_semantic(fh, mintyp, opts)
+local function read_semantic(fh, mintyp)
 	local tag = read_length(fh, mintyp);
-	local value = read_object(fh, opts);
-	local postproc = opts and opts[tag] or tagged_decoders[tag];
+	local value = read_object(fh);
+	local postproc = tagged_decoders[tag];
 	if postproc then
 		return postproc(value);
 	end
@@ -341,7 +341,7 @@ local function read_double(fh)
 	end
 end
 
-local function read_simple(fh, value, opts)
+local function read_simple(fh, value)
 	if value == 24 then
 		value = fh.readbyte();
 	end
@@ -362,9 +362,6 @@ local function read_simple(fh, value, opts)
 	elseif value == 31 then
 		return BREAK;
 	end
-	if opts and opts.simple then
-		return opts.simple(value);
-	end
 	return simple(value);
 end
 
@@ -377,21 +374,10 @@ decoder[5] = read_map;
 decoder[6] = read_semantic;
 decoder[7] = read_simple;
 
--- opts.more(n) -> want more data
--- opts.simple -> decode simple value
--- opts[int] -> tagged decoder
-local function decode(s, opts)
+local function decode(s)
 	local fh = {};
 	local pos = 1;
 
-	local more;
-	if type(opts) == "function" then
-		more = opts;
-	elseif type(opts) == "table" then
-		more = opts.more;
-	elseif opts ~= nil then
-		error(("bad argument #2 to 'decode' (function or table expected, got %s)"):format(type(opts)));
-	end
 	if type(more) ~= "function" then
 		function more()
 			error "input too short";
@@ -401,7 +387,7 @@ local function decode(s, opts)
 	function fh.read(bytes)
 		local ret = string.sub(s, pos, pos + bytes - 1);
 		if #ret < bytes then
-			ret = more(bytes - #ret, fh, opts);
+			ret = more(bytes - #ret, fh);
 			if ret then self.write(ret); end
 			return self.read(bytes);
 		end
@@ -423,7 +409,7 @@ local function decode(s, opts)
 		return #bytes;
 	end
 
-	return read_object(fh, opts);
+	return read_object(fh);
 end
 
 for key, val in pairs({
