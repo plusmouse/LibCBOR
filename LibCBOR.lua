@@ -8,7 +8,7 @@ if not LibStub then
   LibCBOR = {}
   lib = LibCBOR
 else
-  lib = LibStub:NewLibrary("LibCBOR-1.0", 1)
+  lib = LibStub:NewLibrary("LibCBOR-1.0", 2)
 end
 
 if not lib then
@@ -70,17 +70,6 @@ local function simple(value, name, cbor)
 	return setmetatable({ value = value, name = name, cbor = cbor }, simple_mt);
 end
 
-local tagged_mt = {};
-function tagged_mt:__tostring() return ("%d(%s)"):format(self.tag, tostring(self.value)); end
-function tagged_mt:__tocbor() return integer(self.tag, 192) .. encode(self.value); end
-
-local function tagged(tag, value)
-	assert(tag >= 0, "bad argument #1 to 'tagged' (positive integer expected)");
-	return setmetatable({ tag = tag, value = value }, tagged_mt);
-end
-
-local null = simple(22, "null"); -- explicit null
-local undefined = simple(23, "undefined"); -- undefined or nil
 local BREAK = simple(31, "break", "\255");
 
 -- Number types dispatch
@@ -99,7 +88,7 @@ end
 -- Major type 7
 function encoder.float(num)
 	if (num < 0) == (num >= 0) then -- NaN shortcut
-		return "\251\127\255\255\255\255\255\255\255";
+		return "\249\255\255";
 	end
 	local sign = (num > 0 or 1 / num > 0) and 0 or 1;
 	num = math.abs(num)
@@ -175,44 +164,6 @@ function encoder.table(t, opts)
 	--map[#map + 1] = "\255";
 	map[1] = integer(i - 1, 160);
 	return table.concat(is_array and array or map);
-end
-
--- Array or dict-only encoders, which can be set as __tocbor metamethod
-function encoder.array(t, opts)
-	local array = { };
-	for i, v in ipairs(t) do
-		array[i] = encode(v, opts);
-	end
-	return integer(#array, 128) .. table.concat(array);
-end
-
-function encoder.map(t, opts)
-	local map = { "\191" }
-  local i = 0
-	for k, v in pairs(t) do
-    i = i + 1
-    table.insert(map, encode(k, opts))
-		table.insert(map, encode(v, opts))
-	end
-	map[1] = integer(i, 160);
-	return table.concat(map);
-end
-encoder.dict = encoder.map; -- COMPAT
-
-function encoder.ordered_map(t, opts)
-	local map = {};
-	if not t[1] then -- no predefined order
-		local i = 0;
-		for k in pairs(t) do
-			i = i + 1;
-			map[i] = k;
-		end
-		table.sort(map);
-	end
-	for i, k in ipairs(t[1] and t or map) do
-		map[i] = encode(k, opts) .. encode(t[k], opts);
-	end
-	return integer(#map, 160) .. table.concat(map);
 end
 
 encoder["function"] = function ()
@@ -399,9 +350,9 @@ local function read_simple(fh, value, opts)
 	elseif value == 21 then
 		return true;
 	elseif value == 22 then
-		return null;
+		return nil;
 	elseif value == 23 then
-		return undefined;
+		return nil;
 	elseif value == 25 then
 		return read_half_float(fh);
 	elseif value == 26 then
@@ -476,24 +427,10 @@ local function decode(s, opts)
 end
 
 for key, val in pairs({
-	-- en-/decoder functions
 	encode = encode;
 	decode = decode;
-
-	-- tables of per-type en-/decoders
-	type_encoders = encoder;
-	type_decoders = decoder;
-
-	-- special treatment for tagged values
-	tagged_decoders = tagged_decoders;
-
-	-- constructors for annotated types
-	simple = simple;
-	tagged = tagged;
-
-	-- pre-defined simple values
-	null = null;
-	undefined = undefined;
+	Serialize = function(_, ...) return encode(...) end;
+	Deserialize = function(_, ...) return decode(...) end;
 }) do
   lib[key] = val
 end
