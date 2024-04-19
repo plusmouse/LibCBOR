@@ -98,7 +98,7 @@ end
 
 -- Major type 7
 function encoder.float(num)
-	if num ~= num then -- NaN shortcut
+	if (num < 0) == (num >= 0) then -- NaN shortcut
 		return "\251\127\255\255\255\255\255\255\255";
 	end
 	local sign = (num > 0 or 1 / num > 0) and 0 or 1;
