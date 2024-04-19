@@ -17,11 +17,9 @@ end
 
 local maxint = math.huge
 local minint = -math.huge
-local NaN = 0/0;
+local NaN = math.sin(math.huge)
 local m_type = function (n) return n % 1 == 0 and n <= maxint and n >= minint and "integer" or "float" end;
 local b_rshift = bit and b_rshift or function (a, b) return math.max(0, math.floor(a / (2 ^ b))); end
-
-local _ENV = nil; -- luacheck: ignore 211
 
 local encoder = {};
 
