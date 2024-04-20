@@ -8,7 +8,7 @@ if not LibStub then
   LibCBOR = {}
   lib = LibCBOR
 else
-  lib = LibStub:NewLibrary("LibCBOR-1.0", 2)
+  lib = LibStub:NewLibrary("LibCBOR-1.0", 3)
 end
 
 if not lib then
@@ -19,7 +19,7 @@ local maxint = math.huge
 local minint = -math.huge
 local NaN = math.sin(math.huge)
 local m_type = function (n) return n % 1 == 0 and n <= maxint and n >= minint and "integer" or "float" end;
-local b_rshift = bit and b_rshift or function (a, b) return math.max(0, math.floor(a / (2 ^ b))); end
+local b_rshift = bit and bit.rshift or function (a, b) return math.max(0, math.floor(a / (2 ^ b))); end
 
 local encoder = {};
 
