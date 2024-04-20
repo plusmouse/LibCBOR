@@ -62,12 +62,24 @@ local function encode(obj)
   return encoder[type(obj)](obj)
 end
 
-local function encode2(root)
+local function encode2(root, abortCheck, existingState)
+  local GetState
   if type(root) == "table" then
     local keychain = {}
     local keychainIndex = 0
     local keychainLimit = 0
-    --local rootsInKeychain = {}
+    if existingState then
+      keychain = existingState.keychain
+      keychainIndex = existingState.keychainIndex
+      keychainLimit = #keychain
+    end
+    GetState = function()
+      return {
+        keychain = keychain,
+        keychainIndex = keychainIndex,
+      }
+    end
+    local isAbortCheck = type(abortCheck) == "function"
     local current
     while true do
       local obj
@@ -129,6 +141,9 @@ local function encode2(root)
           current.results[index2 + 1] = result
           current.index = current.index + 1
         end
+      end
+      if isAbortCheck and abortCheck() then
+        return nil, GetState()
       end
     end
   else
