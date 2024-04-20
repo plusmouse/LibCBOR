@@ -20,12 +20,9 @@ local minint = -math.huge
 local NaN = math.sin(math.huge)
 local m_type = function (n) return n % 1 == 0 and n <= maxint and n >= minint and "integer" or "float" end;
 local b_rshift = bit and bit.rshift or function (a, b) return math.max(0, math.floor(a / (2 ^ b))); end
+local wipe = table and table.wipe or function(tbl) for key in pairs(tbl) do tbl[key] = nil end end
 
 local encoder = {};
-
-local function encode(obj)
-  return encoder[type(obj)](obj);
-end
 
 -- Major types 0, 1 and length encoding for others
 local function integer(num, m)
@@ -59,6 +56,84 @@ local function integer(num, m)
       num % 0x100);
   end
   error "int too large";
+end
+
+local function encode(obj)
+  return encoder[type(obj)](obj)
+end
+
+local function encode2(root)
+  if type(root) == "table" then
+    local keychain = {}
+    local keychainIndex = 0
+    local keychainLimit = 0
+    --local rootsInKeychain = {}
+    local current
+    while true do
+      local obj
+      local currentKey
+      if current then
+        currentKey = current.keys[current.index]
+        obj = current.root[currentKey]
+      else
+        obj = root
+      end
+      local objType = type(obj)
+      if objType == "table" then
+        local keys = {}
+        local isArray, i = true, 1
+        for key in pairs(obj) do
+          keys[#keys + 1] = key
+          if isArray and i ~= key then
+            isArray = false
+            i = i + 1
+          end
+        end
+        keychainIndex = keychainIndex + 1
+        if keychainIndex <= keychainLimit then
+          current = keychain[keychainIndex]
+          current.root, current.keys, current.index, current.isArray = obj, keys, 1, isArray
+        else
+          keychain[keychainIndex] = {root = obj, keys = keys, index = 1, results = {}, isArray = isArray}
+          keychainLimit = keychainIndex
+          current = keychain[keychainIndex]
+        end
+        if isArray then
+          current.results[1] = integer(#keys, 128)
+        else
+          current.results[1] = integer(#keys, 160)
+        end
+      elseif current.isArray and obj ~= nil then
+        current.results[current.index + 1] = encoder[objType](obj)
+        current.index = current.index + 1
+      elseif obj ~= nil then
+        local index2 = current.index * 2
+        current.results[index2] = encoder[type(currentKey)](currentKey)
+        current.results[index2 + 1] = encoder[objType](obj)
+        current.index = current.index + 1
+      else
+        local isArray = true
+        local result = table.concat(current.results)
+        wipe(current.results)
+        keychainIndex = keychainIndex - 1
+        current = keychain[keychainIndex]
+        if current == nil then
+          return result
+        elseif current.isArray then
+          current.results[current.index + 1] = result
+          current.index = current.index + 1
+        else
+          local currentKey = current.keys[current.index]
+          local index2 = current.index * 2
+          current.results[index2] = encoder[type(currentKey)](currentKey)
+          current.results[index2 + 1] = result
+          current.index = current.index + 1
+        end
+      end
+    end
+  else
+    return encoder[type(root)](root)
+  end
 end
 
 local simple_mt = {};
@@ -415,8 +490,9 @@ end
 
 for key, val in pairs({
   encode = encode;
+  encode2 = encode2;
   decode = decode;
-  Serialize = function(_, ...) return encode(...) end;
+  Serialize = function(_, ...) return encode2(...) end;
   Deserialize = function(_, ...) return decode(...) end;
 }) do
   lib[key] = val

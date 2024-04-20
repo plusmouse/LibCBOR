@@ -61,14 +61,14 @@ function LibCBOR:RunTests()
                     end
                 end
             elseif value ~= rhsTable[key] then
-                -- print("mismatched value: " .. key .. ": " .. tostring(value) .. ", " .. tostring(rhsTable[key]))
+                print("mismatched value: " .. key .. ": " .. tostring(value) .. ", " .. tostring(rhsTable[key]))
                 return false
             end
         end
         -- Check for any keys that are in rhsTable and not lhsTable.
         for key, value in pairs(rhsTable) do
             if lhsTable[key] == nil then
-                --print("mismatched key: " .. key)
+                print("mismatched key: " .. key)
                 return false
             end
         end
