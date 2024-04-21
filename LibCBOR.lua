@@ -8,7 +8,7 @@ if not LibStub then
   LibCBOR = {}
   lib = LibCBOR
 else
-  lib = LibStub:NewLibrary("LibCBOR-1.0", 3)
+  lib = LibStub:NewLibrary("LibCBOR-1.0", 4)
 end
 
 if not lib then
@@ -226,11 +226,17 @@ local function read_length(fh, mintyp)
   if mintyp < 24 then
     return mintyp;
   elseif mintyp < 28 then
-    local out = 0;
-    for _ = 1, 2 ^ (mintyp - 24) do
-      out = out * 256 + fh.readbyte();
+    local bytes = 2 ^ (mintyp - 24)
+    local n1, n2, n3, n4, n5, n6, n7, n8 = fh.readbytes(bytes)
+    if n8 then
+      return n1 * 256 ^ 7 + n2 * 256 ^ 6 + n3 * 256 ^ 5 + n4 * 256 ^ 4 + n5 * 256 ^ 3 + n6 * 256 ^ 2 + n7 * 256 + n8
+    elseif n4 then
+      return n1 * 256 ^ 3 + n2 * 256 ^ 2 + n3 * 256 + n4
+    elseif n2 then
+      return n1 * 256 + n2
+    else
+      return n1
     end
-    return out;
   else
     error "invalid length";
   end
@@ -319,8 +325,7 @@ local function read_semantic(fh, mintyp)
 end
 
 local function read_half_float(fh)
-  local exponent = fh.readbyte();
-  local fraction = fh.readbyte();
+  local exponent, fraction = fh.readbytes(2);
   local sign = exponent < 128 and 1 or -1; -- sign is highest bit
 
   fraction = fraction + (exponent * 256) % 1024; -- copy two(?) bits from exponent to fraction
@@ -338,8 +343,7 @@ local function read_half_float(fh)
 end
 
 local function read_float(fh)
-  local exponent = fh.readbyte();
-  local fraction = fh.readbyte();
+  local exponent, fraction = fh.readbytes(2);
   local sign = exponent < 128 and 1 or -1; -- sign is highest bit
   exponent = exponent * 2 % 256 + b_rshift(fraction, 7);
   fraction = fraction % 128;
@@ -358,8 +362,7 @@ local function read_float(fh)
 end
 
 local function read_double(fh)
-  local exponent = fh.readbyte();
-  local fraction = fh.readbyte();
+  local exponent, fraction = fh.readbytes(2);
   local sign = exponent < 128 and 1 or -1; -- sign is highest bit
 
   exponent = exponent %  128 * 16 + b_rshift(fraction, 4);
@@ -430,6 +433,12 @@ local function decode(s)
     local oldPos = pos
     pos = pos + 1
     return string.byte(s, oldPos)
+  end
+
+  function fh.readbytes(bytes)
+    local oldPos = pos
+    pos = pos + bytes
+    return string.byte(s, oldPos, pos - 1)
   end
 
   return read_object(fh);
