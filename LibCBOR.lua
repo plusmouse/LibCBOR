@@ -3,15 +3,14 @@
 -- Concise Binary Object Representation (CBOR)
 -- RFC 7049
 
-local lib
+local LibCBOR
 if not LibStub then
   LibCBOR = {}
-  lib = LibCBOR
 else
-  lib = LibStub:NewLibrary("LibCBOR-1.0", 4)
+  LibCBOR = LibStub:NewLibrary("LibCBOR-1.0", 4)
 end
 
-if not lib then
+if not LibCBOR then
   return
 end
 
@@ -450,5 +449,6 @@ for key, val in pairs({
   Serialize = function(_, ...) return encode2(...) end;
   Deserialize = function(_, ...) return decode(...) end;
 }) do
-  lib[key] = val
+  LibCBOR[key] = val
 end
+return LibCBOR
