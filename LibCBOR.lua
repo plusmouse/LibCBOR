@@ -261,19 +261,13 @@ end
 
 local decoder = {};
 
-local function read_type(fh)
-  local byte = fh.readbyte();
-  return b_rshift(byte, 5), byte % 32;
-end
-
 local function read_object(fh)
-  local typ, mintyp = read_type(fh);
+  local byte = fh.readbyte();
+  local typ, mintyp = b_rshift(byte, 5), byte % 32;
   return decoder[typ](fh, mintyp);
 end
 
-local function read_integer(fh, mintyp)
-  return read_length(fh, mintyp);
-end
+local read_integer = read_length
 
 local function read_negative_integer(fh, mintyp)
   return -1 - read_length(fh, mintyp);
@@ -293,14 +287,7 @@ local function read_string(fh, mintyp)
   return table.concat(out);
 end
 
-local function read_unicode_string(fh, mintyp)
-  return read_string(fh, mintyp);
-  -- local str = read_string(fh, mintyp);
-  -- if have_utf8 and not utf8.len(str) then
-    -- TODO How to handle this?
-  -- end
-  -- return str;
-end
+local read_unicode_string = read_string
 
 local function read_array(fh, mintyp)
   local out = {};
@@ -349,7 +336,7 @@ local function read_semantic(fh, mintyp)
   if postproc then
     return postproc(value);
   end
-  return tagged(tag, value);
+  return nil;
 end
 
 local function read_half_float(fh)
@@ -437,7 +424,7 @@ local function read_simple(fh, value)
   elseif value == 31 then
     return BREAK;
   end
-  return simple(value);
+  return nil;
 end
 
 decoder[0] = read_integer;
@@ -453,36 +440,17 @@ local function decode(s)
   local fh = {};
   local pos = 1;
 
-  local more = nil
-  if type(more) ~= "function" then
-    more = function()
-      error "input too short";
-    end
-  end
-
   function fh.read(bytes)
-    local ret = string.sub(s, pos, pos + bytes - 1);
-    if #ret < bytes then
-      ret = more(bytes - #ret, fh);
-      if ret then self.write(ret); end
-      return self.read(bytes);
-    end
-    pos = pos + bytes;
+    local newPos = pos + bytes
+    local ret = string.sub(s, pos, newPos - 1);
+    pos = newPos;
     return ret;
   end
 
   function fh.readbyte()
+    local oldPos = pos
     pos = pos + 1
-    return string.byte(s, pos - 1)
-  end
-
-  function fh.write(bytes) -- luacheck: no self
-    s = s .. bytes;
-    if pos > 256 then
-      s = string.sub(s, pos + 1);
-      pos = 1;
-    end
-    return #bytes;
+    return string.byte(s, oldPos)
   end
 
   return read_object(fh);
