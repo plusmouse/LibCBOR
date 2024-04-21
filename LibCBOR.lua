@@ -445,8 +445,7 @@ local function decode(s)
 end
 
 for key, val in pairs({
-  encode = encode;
-  encode2 = encode2;
+  encode = encode2;
   decode = decode;
   Serialize = function(_, ...) return encode2(...) end;
   Deserialize = function(_, ...) return decode(...) end;

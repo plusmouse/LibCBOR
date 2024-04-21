@@ -12,9 +12,6 @@ API
 local cbor = LibStub("LibCBOR-1.0")
 ```
 
-Lua-CBOR has a similar API to many other serialization libraries, like
-Lua-CJSON.
-
 ### `cbor:Serialize(object)`
 
 Encodes `object` into its CBOR representation and returns that as a string.
