@@ -15,10 +15,7 @@ if not lib then
   return
 end
 
-local maxint = math.huge
-local minint = -math.huge
 local NaN = math.sin(math.huge)
-local m_type = function (n) return n % 1 == 0 and n <= maxint and n >= minint and "integer" or "float" end;
 local b_rshift = bit and bit.rshift or function (a, b) return math.max(0, math.floor(a / (2 ^ b))); end
 local wipe = table and table.wipe or function(tbl) for key in pairs(tbl) do tbl[key] = nil end end
 
@@ -26,10 +23,6 @@ local encoder = {};
 
 -- Major types 0, 1 and length encoding for others
 local function integer(num, m)
-  if m == 0 and num < 0 then
-    -- negative integer, major type 1
-    num, m = - num - 1, 32;
-  end
   if num < 24 then
     return string.char(m + num);
   elseif num < 2 ^ 8 then
@@ -67,7 +60,6 @@ local function encode2(root)
     local keychain = {}
     local keychainIndex = 0
     local keychainLimit = 0
-    --local rootsInKeychain = {}
     local current
     while true do
       local obj
@@ -136,32 +128,8 @@ local function encode2(root)
   end
 end
 
-local simple_mt = {};
-function simple_mt:__tostring() return self.name or ("simple(%d)"):format(self.value); end
-function simple_mt:__tocbor() return self.cbor or integer(self.value, 224); end
-
-local function simple(value, name, cbor)
-  assert(value >= 0 and value <= 255, "bad argument #1 to 'simple' (integer in range 0..255 expected)");
-  return setmetatable({ value = value, name = name, cbor = cbor }, simple_mt);
-end
-
-local BREAK = simple(31, "break", "\255");
-
--- Number types dispatch
-function encoder.number(num)
-  return encoder[m_type(num)](num);
-end
-
--- Major types 0, 1
-function encoder.integer(num)
-  if num < 0 then
-    return integer(-1 - num, 32);
-  end
-  return integer(num, 0);
-end
-
 -- Major type 7
-function encoder.float(num)
+local function encoder_float(num)
   if (num < 0) == (num >= 0) then -- NaN shortcut
     return "\249\255\255";
   end
@@ -195,6 +163,15 @@ function encoder.float(num)
   )
 end
 
+-- Number types dispatch
+function encoder.number(num)
+  if num % 1 == 0 and num < 2^64 and num > - 2^64 + 1 then
+    -- Major types 0, 1
+    return num < 0 and integer(- 1 - num, 32) or integer(num, 0)
+  else
+    return encoder_float(num)
+  end
+end
 
 -- Major type 2 - byte strings
 function encoder.bytestring(s)
@@ -258,6 +235,8 @@ local function read_length(fh, mintyp)
     error "invalid length";
   end
 end
+
+local BREAK = {} -- Empty table to be unique constant
 
 local decoder = {};
 
