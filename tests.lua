@@ -1,6 +1,7 @@
 -- Tests borrowed from LibSerialize and modified for LibCBOR
+local LibCBOR
 if loadfile then
-  loadfile("LibCBOR.lua")()
+  LibCBOR = loadfile("LibCBOR.lua")()
 else
   LibCBOR = LibStub and LibStub:GetLibrary("LibCBOR-1.0")
 end
@@ -185,6 +186,8 @@ function LibCBOR:RunTests()
         { { 1, 2, [-math.huge] = "f", [3] = 3 }, 16, nil, 3 },
     }
 
+    print = _G.print
+
     do
         local t = { a = 1, b = 2 }
         table.insert(testCases, { { t, t, t }, 13 })
@@ -194,8 +197,6 @@ function LibCBOR:RunTests()
     for i, testCase in ipairs(testCases) do
         checkLatest(i, unpack(testCase))
     end
-
-    print = _G.print
     -- Since all the above tests assume serialization success, try some failures now.
     local failCases = {
         { print },

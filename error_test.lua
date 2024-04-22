@@ -1,6 +1,6 @@
 local LibCBOR = loadfile("LibCBOR.lua")()
 
-print(LibCBOR.encode({
+print(LibCBOR.decode(LibCBOR.encode({
 		["117439"] = {
 			["l"] = {
 			},
@@ -21,4 +21,4 @@ print(LibCBOR.encode({
 			},
 			["m"] = 700,
 		},
-}))
+})))

@@ -50,7 +50,7 @@ local function integer(num, m)
   error "int too large";
 end
 
-local function encode(obj)
+local function encode1(obj)
   return encoder[type(obj)](obj)
 end
 
@@ -206,10 +206,10 @@ function encoder.table(t)
     is_array = is_array and i == k;
     i = i + 1;
 
-    local encoded_v = encode(v);
+    local encoded_v = encode1(v);
     array[i] = encoded_v;
 
-    table.insert(map, encode(k))
+    table.insert(map, encode1(k))
     table.insert(map, encoded_v)
   end
   --map[#map + 1] = "\255";
@@ -241,8 +241,6 @@ local function read_length(fh, mintyp)
   end
 end
 
-local BREAK = {} -- Empty table to be unique constant
-
 local decoder = {};
 
 local function read_object(fh)
@@ -264,7 +262,7 @@ local function read_string(fh, mintyp)
   local out = {};
   local i = 1;
   local v = read_object(fh);
-  while v ~= BREAK do
+  while v ~= nil do
     out[i], i = v, i + 1;
     v = read_object(fh);
   end
@@ -278,7 +276,7 @@ local function read_array(fh, mintyp)
   if mintyp == 31 then
     local i = 1;
     local v = read_object(fh);
-    while v ~= BREAK do
+    while v ~= nil do
       out[i], i = v, i + 1;
       v = read_object(fh);
     end
@@ -297,7 +295,7 @@ local function read_map(fh, mintyp)
   if mintyp == 31 then
     local i = 1;
     k = read_object(fh);
-    while k ~= BREAK do
+    while k ~= nil do
       out[k], i = read_object(fh), i + 1;
       k = read_object(fh);
     end
@@ -385,27 +383,31 @@ local function read_double(fh)
 end
 
 local function read_simple(fh, value)
+  -- Unassigned value
   if value == 24 then
-    value = fh.readbyte();
+     fh.readbyte();
+     return nil
   end
+
   if value == 20 then
     return false;
   elseif value == 21 then
     return true;
-  elseif value == 22 then
-    return nil;
-  elseif value == 23 then
-    return nil;
+  --elseif value == 22 then
+  --  return nil;
+  --elseif value == 23 then
+  --  return nil;
   elseif value == 25 then
     return read_half_float(fh);
   elseif value == 26 then
     return read_float(fh);
   elseif value == 27 then
     return read_double(fh);
-  elseif value == 31 then
-    return BREAK;
+  --elseif value == 31 then
+  --  return BREAK;
+  else
+    return nil;
   end
-  return nil;
 end
 
 decoder[0] = read_integer;
@@ -417,7 +419,7 @@ decoder[5] = read_map;
 decoder[6] = read_semantic;
 decoder[7] = read_simple;
 
-local function decode(s)
+local function decode1(s)
   local fh = {};
   local pos = 1;
 
@@ -443,11 +445,105 @@ local function decode(s)
   return read_object(fh);
 end
 
+local function decode2(s)
+  local pos = 1;
+
+  local fh = {}
+
+  function fh.read(bytes)
+    local newPos = pos + bytes
+    local ret = string.sub(s, pos, newPos - 1);
+    pos = newPos;
+    return ret;
+  end
+
+  function fh.readbyte()
+    local oldPos = pos
+    pos = pos + 1
+    return string.byte(s, oldPos)
+  end
+
+  function fh.readbytes(bytes)
+    local oldPos = pos
+    pos = pos + bytes
+    return string.byte(s, oldPos, pos - 1)
+  end
+
+  local tree = {}
+  local treeIndex = 1
+  local treeLimit = 1
+  local current
+
+  do
+    local byte = string.byte(s, pos)
+    pos = pos + 1
+    local typ, mintyp = b_rshift(byte, 5), byte % 32;
+
+    if typ ~= 4 and typ ~= 5 then
+      return decoder[typ](fh, mintyp)
+    end
+
+    -- assumes a map or array
+    tree[treeIndex] = { left = -1, isArray = typ == 4, obj = {} }
+    current = tree[treeIndex]
+    if mintyp ~= 31 then
+      current.left = read_length(fh, mintyp)
+    end
+  end
+
+  local strlen = #s
+  local decoder = decoder
+  while pos <= strlen or current.left == 0 do
+    local key
+    if current.left ~= 0 then
+      if current.isArray then
+        key = #current.obj + 1
+      else
+        local byte = string.byte(s, pos)
+        pos = pos + 1
+        local typ, mintyp = b_rshift(byte, 5), byte % 32;
+        key = decoder[typ](fh, mintyp)
+      end
+      current.left = current.left - 1
+    end
+    if key == nil then
+      treeIndex = treeIndex - 1
+      if treeIndex == 0 then
+        return tree[1].obj
+      else
+        current = tree[treeIndex]
+      end
+    else
+      local byte = string.byte(s, pos)
+      pos = pos + 1
+      local typ, mintyp = b_rshift(byte, 5), byte % 32;
+      if typ == 4 or typ == 5 then
+        local oldCurrent = current
+        treeIndex = treeIndex + 1
+        if treeIndex > treeLimit then
+          tree[treeIndex] = {}
+          treeLimit = treeIndex
+        end
+        current = tree[treeIndex]
+        current.isArray = typ == 4
+        current.obj = {}
+        current.left = mintyp == 31 and -1 or read_length(fh, mintyp)
+        oldCurrent.obj[key] = current.obj
+      else
+        current.obj[key] = decoder[typ](fh, mintyp)
+      end
+    end
+  end
+
+  error("didn't finish data")
+end
+
 for key, val in pairs({
   encode = encode2;
-  decode = decode;
+  decode = decode1;
+  decode2 = decode2;
   Serialize = function(_, ...) return encode2(...) end;
-  Deserialize = function(_, ...) return decode(...) end;
+  Deserialize = function(_, ...) return decode2(...) end;
 }) do
   LibCBOR[key] = val
 end
