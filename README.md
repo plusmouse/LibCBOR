@@ -24,9 +24,9 @@ Using external input
 --------------------
 
 When injecting external CBOR data into a lua file for WoW replace the following
-characters to prevent the lua interpreter ending the string early, so:
-* Null character (0) is to be replaced with \000 (literally, so 4  characters)
-* alert character (7) to literally `\a`
+codes with the literal characters shown to prevent the lua interpreter glitching:
+* Null (0) is to be replaced with `\000`
+* alert (7) to literally `\a`
 * newline (10) to `\n`
 * carriage return (13) to `\r`
 * `\` (92) to `\\`
